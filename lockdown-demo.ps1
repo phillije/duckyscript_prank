@@ -1,19 +1,13 @@
-<#
-    lockdown-demo.ps1
-    Demo: maximise console, remove Close (X) button, ignore Ctrl+C/Alt+F4,
-    and require a secret code to exit.
-
-    Run with:
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\lockdown-demo.ps1"
-
-    Author: small demo for kiosk/prank-style behaviour — NOT truly uncloseable.
-#>
+# lockdown-demo.ps1
+# Demo: maximise console, remove Close (X) button, ignore Ctrl+C/Alt+F4,
+# and require a secret code to exit.
+# Run with:
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\lockdown-demo.ps1"
 
 # ----- Helper: define Win32 calls in C# -----
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
-using System.Text;
 
 public static class Win32Console {
     public delegate bool ConsoleCtrlDelegate(uint ctrlType);
@@ -30,21 +24,21 @@ public static class Win32Console {
     [DllImport("user32.dll")]
     public static extern bool RemoveMenu(IntPtr hMenu, uint uPosition, uint uFlags);
 
-    // For optional restoring: call GetSystemMenu(hWnd, true) will revert the menu.
+    // For optional restoring: call GetSystemMenu(hWnd, true) to revert the menu.
     [DllImport("kernel32.dll")]
     public static extern bool SetConsoleCtrlHandler(ConsoleCtrlDelegate HandlerRoutine, bool Add);
 }
-'@ -PassThru | Out-Null
+'@
 
 # ----- Constants -----
-$SW_SHOWMAXIMIZED = 3          # maximise window
+$SW_SHOWMAXIMIZED = 3
 $SC_CLOSE = 0xF060
 $MF_BYCOMMAND = 0x00000000
 
 # ----- Get console handle and maximise -----
 $hwnd = [Win32Console]::GetConsoleWindow()
 if ($hwnd -eq [IntPtr]::Zero) {
-    Write-Warning "Couldn't get console window handle. This script should be run from the standalone console (not ISE)."
+    Write-Warning "Couldn't get console window handle. Run from the standalone console (not ISE)."
 } else {
     [Win32Console]::ShowWindow($hwnd, $SW_SHOWMAXIMIZED) | Out-Null
 }
@@ -71,18 +65,15 @@ $handler = [Win32Console+ConsoleCtrlDelegate]{
 # ----- Tidy console appearance (avoid scrollbars) -----
 try {
     $raw = $host.UI.RawUI
-    $maxWidth = $raw.BufferSize.Width
-    $maxHeight = $raw.BufferSize.Height
-    # Set buffer to window size to avoid vertical scrollbar
-    $raw.BufferSize = $raw.WindowSize
+    $raw.BufferSize = $raw.WindowSize   # match buffer to window to avoid scrollbars
 } catch {
-    # Ignore if environment doesn't allow changes (eg. Windows Terminal)
+    # Ignore if environment doesn't allow changes (e.g. Windows Terminal)
 }
 
 # ----- UI: fake lockdown message -----
 Clear-Host
 Write-Host "============================================="
-Write-Host "   LOCKDOWN DEMO — kiosk-like console active   "
+Write-Host "   LOCKDOWN DEMO - kiosk-like console active   "
 Write-Host "=============================================`n"
 Write-Host "This console is maximised, the close button is hidden,"
 Write-Host "and Ctrl+C / standard close events are being intercepted."
@@ -98,13 +89,11 @@ while ($true) {
     $attempts += 1
     $input = Read-Host "Type the secret code to unlock (attempt $attempts)"
     if ($input -eq $secret) {
-        Write-Host "`nSecret accepted — restoring normal console and exiting..."
+        Write-Host "`nSecret accepted - restoring normal console and exiting..."
         break
     } else {
         Write-Host "Wrong code. Nice try! (Tip: this is only a demo.)`n"
     }
-
-    # small breathing pause to avoid spamming
     Start-Sleep -Seconds 1
 }
 
@@ -112,23 +101,17 @@ while ($true) {
 try {
     # Revert system menu to original by requesting GetSystemMenu with bRevert = true
     [Win32Console]::GetSystemMenu($hwnd, $true) | Out-Null
-} catch {
-    # ignore
-}
+} catch { }
 
 try {
     [Win32Console]::SetConsoleCtrlHandler($handler, $false) | Out-Null
-} catch {
-    # ignore
-}
+} catch { }
 
 # Optional: restore normal window (not required)
 $SW_RESTORE = 9
 try {
     [Win32Console]::ShowWindow($hwnd, $SW_RESTORE) | Out-Null
-} catch {
-    # ignore
-}
+} catch { }
 
 Write-Host "Exited cleanly. Have a nice day!"
 Exit 0
