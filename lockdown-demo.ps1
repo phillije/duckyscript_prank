@@ -53,6 +53,46 @@ try {
     Write-Warning "Could not remove close menu: $_"
 }
 
+# ----- Borderless fullscreen (cover taskbar) -----
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class Win32FS {
+    public const int GWL_STYLE = -16;
+    public const long WS_OVERLAPPEDWINDOW = 0x00CF0000;
+    public const long WS_VISIBLE = 0x10000000;
+
+    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+
+    public const uint SWP_SHOWWINDOW = 0x0040;
+    public const uint SWP_FRAMECHANGED = 0x0020;
+
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int nIndex);
+    [DllImport("user32.dll")] public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    [DllImport("user32.dll")] public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int X, int Y, int cx, int cy, uint uFlags);
+}
+'@
+
+if ($hwnd -ne [IntPtr]::Zero) {
+    # Remove standard window chrome (caption, borders, etc.)
+    $style = [Win32FS]::GetWindowLongPtr($hwnd, [Win32FS]::GWL_STYLE)
+    $newStyle = [IntPtr]([uint64]$style -band -bnot [uint64][Win32FS]::WS_OVERLAPPEDWINDOW -bor [uint64][Win32FS]::WS_VISIBLE)
+    [Win32FS]::SetWindowLongPtr($hwnd, [Win32FS]::GWL_STYLE, $newStyle) | Out-Null
+
+    # Get primary screen size
+    $SM_CXSCREEN = 0
+    $SM_CYSCREEN = 1
+    $w = [Win32FS]::GetSystemMetrics($SM_CXSCREEN)
+    $h = [Win32FS]::GetSystemMetrics($SM_CYSCREEN)
+
+    # Resize and raise above taskbar (topmost)
+    [Win32FS]::SetWindowPos($hwnd, [Win32FS]::HWND_TOPMOST, 0, 0, $w, $h,
+        [Win32FS]::SWP_SHOWWINDOW -bor [Win32FS]::SWP_FRAMECHANGED) | Out-Null
+}
+
 # ----- Prevent Ctrl+C / Close events by registering a no-op handler -----
 # Return true to indicate the event was handled (so Windows won't terminate)
 $handler = [Win32Console+ConsoleCtrlDelegate]{
