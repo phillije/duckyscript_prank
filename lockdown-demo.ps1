@@ -30,6 +30,31 @@ public static class Win32Console {
 }
 '@
 
+# If running inside Windows Terminal, re-spawn in classic conhost and exit.
+if ($env:WT_SESSION) {
+    $exe = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+    if (-not (Test-Path $exe)) {
+        # fallback for PowerShell 7 if desired (but that may still use its own host)
+        $exe = "C:\Program Files\PowerShell\7\pwsh.exe"
+    }
+
+    # Build argument list to re-run this script (if called as a file)
+    if ($MyInvocation.MyCommand.Path) {
+        $scriptPath = $MyInvocation.MyCommand.Path
+    } else {
+        # If no script path (interactive), don't respawn
+        Write-Host "Running interactively in Windows Terminal; skipping respawn."
+        # optionally you could continue here
+        $scriptPath = $null
+    }
+
+    if ($scriptPath) {
+        Start-Process -FilePath $exe -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath -WindowStyle Normal
+        Exit
+    }
+}
+
+
 # ----- Constants -----
 $SW_SHOWMAXIMIZED = 3
 $SC_CLOSE = 0xF060
