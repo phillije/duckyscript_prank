@@ -2,7 +2,7 @@
 # Demo: maximise console, remove Close (X) button, ignore Ctrl+C/Alt+F4,
 # and require a secret code to exit.
 # Run with:
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\lockdown-demo.ps1"
+#   powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0lockdown-demo.ps1"
 
 # ----- Helper: define Win32 calls in C# -----
 Add-Type -TypeDefinition @'
