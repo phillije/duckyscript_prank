@@ -2,7 +2,7 @@
 # Demo: maximise console, remove Close (X) button, ignore Ctrl+C/Alt+F4,
 # and require a secret code to exit.
 # Run with:
-#   powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0lockdown-demo.ps1"
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\lockdown-demo.ps1"
 
 # ----- Helper: define Win32 calls in C# -----
 Add-Type -TypeDefinition @'
@@ -30,31 +30,6 @@ public static class Win32Console {
 }
 '@
 
-# If running inside Windows Terminal, re-spawn in classic conhost and exit.
-if ($env:WT_SESSION) {
-    $exe = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
-    if (-not (Test-Path $exe)) {
-        # fallback for PowerShell 7 if desired (but that may still use its own host)
-        $exe = "C:\Program Files\PowerShell\7\pwsh.exe"
-    }
-
-    # Build argument list to re-run this script (if called as a file)
-    if ($MyInvocation.MyCommand.Path) {
-        $scriptPath = $MyInvocation.MyCommand.Path
-    } else {
-        # If no script path (interactive), don't respawn
-        Write-Host "Running interactively in Windows Terminal; skipping respawn."
-        # optionally you could continue here
-        $scriptPath = $null
-    }
-
-    if ($scriptPath) {
-        Start-Process -FilePath $exe -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath -WindowStyle Normal
-        Exit
-    }
-}
-
-
 # ----- Constants -----
 $SW_SHOWMAXIMIZED = 3
 $SC_CLOSE = 0xF060
@@ -76,46 +51,6 @@ try {
     }
 } catch {
     Write-Warning "Could not remove close menu: $_"
-}
-
-# ----- Borderless fullscreen (cover taskbar) -----
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-
-public static class Win32FS {
-    public const int GWL_STYLE = -16;
-    public const long WS_OVERLAPPEDWINDOW = 0x00CF0000;
-    public const long WS_VISIBLE = 0x10000000;
-
-    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-
-    public const uint SWP_SHOWWINDOW = 0x0040;
-    public const uint SWP_FRAMECHANGED = 0x0020;
-
-    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int nIndex);
-    [DllImport("user32.dll")] public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-    [DllImport("user32.dll")] public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
-        int X, int Y, int cx, int cy, uint uFlags);
-}
-'@
-
-if ($hwnd -ne [IntPtr]::Zero) {
-    # Remove standard window chrome (caption, borders, etc.)
-    $style = [Win32FS]::GetWindowLongPtr($hwnd, [Win32FS]::GWL_STYLE)
-    $newStyle = [IntPtr]([uint64]$style -band -bnot [uint64][Win32FS]::WS_OVERLAPPEDWINDOW -bor [uint64][Win32FS]::WS_VISIBLE)
-    [Win32FS]::SetWindowLongPtr($hwnd, [Win32FS]::GWL_STYLE, $newStyle) | Out-Null
-
-    # Get primary screen size
-    $SM_CXSCREEN = 0
-    $SM_CYSCREEN = 1
-    $w = [Win32FS]::GetSystemMetrics($SM_CXSCREEN)
-    $h = [Win32FS]::GetSystemMetrics($SM_CYSCREEN)
-
-    # Resize and raise above taskbar (topmost)
-    [Win32FS]::SetWindowPos($hwnd, [Win32FS]::HWND_TOPMOST, 0, 0, $w, $h,
-        [Win32FS]::SWP_SHOWWINDOW -bor [Win32FS]::SWP_FRAMECHANGED) | Out-Null
 }
 
 # ----- Prevent Ctrl+C / Close events by registering a no-op handler -----
